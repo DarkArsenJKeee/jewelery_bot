@@ -15,12 +15,11 @@ from aiogram.types import (
 
 
 import os
+from aiogram import Bot, Dispatcher
 
-from aiohttp.helpers import TOKEN
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-
-bot = Bot(token=BOT_TOKEN)
+TOKEN = os.getenv("BOT_TOKEN")  # вернёт строку
+bot = Bot(TOKEN)
+dp = Dispatcher()
 
 # пути к картинкам (ЛОКАЛЬНЫЕ файлы)
 IMAGES = {

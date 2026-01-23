@@ -1,1 +1,1 @@
-web: python final_version_two.py
+worker: python version_two.py
