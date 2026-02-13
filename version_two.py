@@ -16,10 +16,30 @@ from aiogram.types import (
 
 import os
 from aiogram import Bot, Dispatcher
+import sqlite3
+from datetime import datetime
 
 TOKEN = os.getenv("BOT_TOKEN")  # вернёт строку
 bot = Bot(TOKEN)
 dp = Dispatcher()
+
+conn = sqlite3.connect("database.db")
+cursor = conn.cursor()
+
+ADMIN_ID = 480606988  # сюда вставь свой Telegram ID
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    username TEXT,
+    first_name TEXT,
+    symbol TEXT,
+    date TEXT
+)
+""")
+
+conn.commit()
 
 # пути к картинкам (ЛОКАЛЬНЫЕ файлы)
 IMAGES = {
@@ -107,8 +127,7 @@ RESULT_TEXT = {
 
 # ================== БОТ ==================
 
-bot = Bot(TOKEN)
-dp = Dispatcher()
+
 
 user_progress = {}
 user_scores = defaultdict(lambda: defaultdict(int))
@@ -140,7 +159,6 @@ def question_kb(q_index: int, chosen: str | None = None):
 
 @dp.message(Command("start"))
 
-
 async def start(message: Message):
     user_progress[message.from_user.id] = 0
     user_scores[message.from_user.id].clear()
@@ -151,6 +169,25 @@ async def start(message: Message):
         "Ответь интуитивно, здесь нет «правильных» вариантов.",
         reply_markup=start_kb(),
     )
+@dp.message(Command("users"))
+async def users_handler(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    cursor.execute("SELECT first_name, username, symbol, date FROM results ORDER BY id DESC")
+    users = cursor.fetchall()
+
+    if not users:
+        await message.answer("Пока никто не прошёл тест.")
+        return
+
+    text = "📋 Кто прошёл тест:\n\n"
+
+    for user in users[-20:]:
+        name, username, symbol, date = user
+        text += f"{name} (@{username}) — {symbol}\n"
+
+    await message.answer(text)
 
 @dp.callback_query(F.data == "start_test")
 async def begin_test(call: CallbackQuery):
@@ -184,7 +221,7 @@ async def send_question(user_id: int):
     q = QUESTIONS[user_progress[user_id]]
     await bot.send_message(
         user_id,
-        f"{q['num']} **{q['text']}**",
+        f"{q['num']} **{q['text']}",
         reply_markup=question_kb(user_progress[user_id]),
         parse_mode="Markdown",
     )
@@ -195,7 +232,8 @@ from aiogram.types import FSInputFile
 async def send_result(user_id: int):
     scores = user_scores[user_id]
     result = max(scores, key=scores.get)
-
+    user = await bot.get_chat(user_id)
+    save_result(user, result)
     media = []
 
     for img_path in IMAGES[result]:
@@ -229,6 +267,20 @@ async def send_result(user_id: int):
 
 
 # ================== ЗАПУСК ==================
+def save_result(user, symbol):
+    cursor.execute(
+        "INSERT INTO results (user_id, username, first_name, symbol, date) VALUES (?, ?, ?, ?, ?)",
+        (
+            user.id,
+            user.username,
+            user.first_name,
+            symbol,
+            datetime.now().isoformat()
+        )
+    )
+    conn.commit()
+
+
 
 async def main():
     await dp.start_polling(bot)
